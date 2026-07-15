@@ -1,3 +1,4 @@
 ultralytics
 pillow
 requests
+opencv-python-headless
