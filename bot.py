@@ -5,6 +5,7 @@ Corre en Railway.app - Independiente de Streamlit
 """
 
 import os
+import sys
 import requests
 from PIL import Image
 from ultralytics import YOLO
@@ -16,44 +17,57 @@ import time
 # CONFIGURACIÓN DESDE VARIABLES DE ENTORNO
 # ==========================================
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+
+if not TELEGRAM_BOT_TOKEN:
+    print("❌ ERROR CRÍTICO: La variable TELEGRAM_BOT_TOKEN no está configurada.", flush=True)
+    sys.exit(1)
+
 CLASSES = ['Crítico', 'Nada Saludable', 'Saludable', 'media_saludable']
 ecuador_tz = timezone(timedelta(hours=-5))
 
 # ==========================================
 # CARGAR MODELO
 # ==========================================
-print("🔄 Descargando modelo desde Hugging Face...")
-model_url = "https://huggingface.co/EAMB2001/detector-plagas-modelo/resolve/main/modelo.pt"
-response = requests.get(model_url)
-model_path = "/tmp/modelo.pt"
-with open(model_path, "wb") as f:
-    f.write(response.content)
-
-model = YOLO(model_path)
-print("✅ Modelo cargado correctamente")
+print("🔄 Descargando modelo desde Hugging Face...", flush=True)
+try:
+    model_url = "https://huggingface.co/EAMB2001/detector-plagas-modelo/resolve/main/modelo.pt"
+    response = requests.get(model_url, timeout=60)
+    response.raise_for_status()  # Lanza error si la descarga falla
+    
+    model_path = "/tmp/modelo.pt"
+    with open(model_path, "wb") as f:
+        f.write(response.content)
+    
+    print("⏳ Inicializando modelo YOLO...", flush=True)
+    model = YOLO(model_path)
+    print("✅ Modelo cargado correctamente", flush=True)
+except Exception as e:
+    print(f"❌ ERROR al cargar el modelo: {e}", flush=True)
+    sys.exit(1)
 
 # ==========================================
 # FUNCIONES DEL BOT
 # ==========================================
 def descargar_imagen_telegram(file_id):
-    """Descarga imagen desde Telegram"""
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getFile?file_id={file_id}"
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
         file_path = response.json()['result']['file_path']
         
         url_download = f"https://api.telegram.org/file/bot{TELEGRAM_BOT_TOKEN}/{file_path}"
-        response = requests.get(url_download)
+        response = requests.get(url_download, timeout=30)
+        response.raise_for_status()
         
         return response.content
     except Exception as e:
-        print(f"❌ Error descargando imagen: {e}")
+        print(f"❌ Error descargando imagen: {e}", flush=True)
         return None
 
 def analizar_imagen(imagen_bytes):
-    """Analiza imagen con YOLO"""
     try:
-        image = Image.open(BytesIO(imagen_bytes))
+        # Convertir a RGB para evitar errores con imágenes PNG/RGBA
+        image = Image.open(BytesIO(imagen_bytes)).convert('RGB')
         temp_path = "/tmp/telegram_analysis.jpg"
         image.save(temp_path)
         
@@ -73,11 +87,10 @@ def analizar_imagen(imagen_bytes):
         else:
             return None, 0, None
     except Exception as e:
-        print(f"❌ Error analizando imagen: {e}")
+        print(f"❌ Error analizando imagen: {e}", flush=True)
         return None, 0, None
 
 def enviar_mensaje(chat_id, texto, imagen_bytes=None):
-    """Envía mensaje a Telegram"""
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         requests.post(url, json={
@@ -91,16 +104,15 @@ def enviar_mensaje(chat_id, texto, imagen_bytes=None):
             files = {'photo': ('image.jpg', imagen_bytes, 'image/jpeg')}
             requests.post(url_foto, files=files, 
                          data={"chat_id": chat_id}, timeout=10)
-        
         return True
     except Exception as e:
-        print(f"❌ Error enviando mensaje: {e}")
+        print(f"❌ Error enviando mensaje: {e}", flush=True)
         return False
 
 # ==========================================
 # LOOP PRINCIPAL DEL BOT
 # ==========================================
-print("🤖 Bot iniciado. Esperando mensajes...")
+print("🤖 Bot iniciado. Esperando mensajes...", flush=True)
 last_update_id = 0
 
 while True:
@@ -121,7 +133,7 @@ while True:
                     last_update_id = update_id
                 
                 if 'photo' in message:
-                    print(f"📸 Nueva imagen recibida de {chat_id}")
+                    print(f"📸 Nueva imagen recibida de {chat_id}", flush=True)
                     
                     photo = message['photo'][-1]
                     file_id = photo['file_id']
@@ -131,7 +143,6 @@ while True:
                     imagen_bytes = descargar_imagen_telegram(file_id)
                     if imagen_bytes:
                         clase, conf, imagen_resultado = analizar_imagen(imagen_bytes)
-                        
                         ahora = datetime.now(ecuador_tz)
                         
                         if clase:
@@ -152,5 +163,5 @@ while True:
         time.sleep(1)
         
     except Exception as e:
-        print(f"❌ Error en el loop: {e}")
+        print(f"❌ Error en el loop: {e}", flush=True)
         time.sleep(5)
