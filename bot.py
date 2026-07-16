@@ -38,7 +38,7 @@ try:
     with open(model_path, "wb") as f:
         f.write(response.content)
     
-    print("⏳ Inicializando modelo YOLO...", flush=True)
+    print(" Inicializando modelo YOLO...", flush=True)
     model = YOLO(model_path)
     print("✅ Modelo cargado correctamente", flush=True)
 except Exception as e:
@@ -158,15 +158,23 @@ while True:
                         ahora = datetime.now(ecuador_tz)
                         
                         if clase:
+                            # Formato según la clase detectada
+                            if clase in ['Crítico', 'Nada Saludable']:
+                                titulo = "*ALERTA DE PLAGA DETECTADA*"
+                                accion = "⚠️ Acción recomendada: Revisar planta inmediatamente"
+                            else:
+                                titulo = "*HOJA EN BUEN ESTADO*"
+                                accion = " No se requieren acciones inmediatas"
+                            
                             respuesta = f"""
-🍃 *Resultado del Análisis*
+{titulo}
 
-🎯 *Clase:* {clase}
-📊 *Confianza:* {conf:.2f}%
-⏰ *Hora:* {ahora.strftime('%H:%M:%S')}
-📅 *Fecha:* {ahora.strftime('%d/%m/%Y')}
+ Clase: {clase}
+📊 Confianza: {conf:.2f}%
+⏰ Hora: {ahora.strftime('%H:%M:%S')}
+📅 Fecha: {ahora.strftime('%d/%m/%Y')}
 
-{'🚨 *¡ALERTA!* Revisa la planta inmediatamente' if clase in ['Crítico', 'Nada Saludable'] else '✅ Hoja en buen estado'}
+{accion}
                             """
                             enviar_mensaje(chat_id, respuesta, imagen_resultado)
                         else:
@@ -175,5 +183,5 @@ while True:
         time.sleep(1)
         
     except Exception as e:
-        print(f" Error en el loop: {e}", flush=True)
+        print(f"❌ Error en el loop: {e}", flush=True)
         time.sleep(5)
