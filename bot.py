@@ -28,11 +28,11 @@ ecuador_tz = timezone(timedelta(hours=-5))
 # ==========================================
 # CARGAR MODELO
 # ==========================================
-print("🔄 Descargando modelo desde Hugging Face...", flush=True)
+print(" Descargando modelo desde Hugging Face...", flush=True)
 try:
     model_url = "https://huggingface.co/EAMB2001/detector-plagas-modelo/resolve/main/modelo.pt"
     response = requests.get(model_url, timeout=60)
-    response.raise_for_status()  # Lanza error si la descarga falla
+    response.raise_for_status()
     
     model_path = "/tmp/modelo.pt"
     with open(model_path, "wb") as f:
@@ -66,7 +66,6 @@ def descargar_imagen_telegram(file_id):
 
 def analizar_imagen(imagen_bytes):
     try:
-        # Convertir a RGB para evitar errores con imágenes PNG/RGBA
         image = Image.open(BytesIO(imagen_bytes)).convert('RGB')
         temp_path = "/tmp/telegram_analysis.jpg"
         image.save(temp_path)
@@ -114,6 +113,7 @@ def enviar_mensaje(chat_id, texto, imagen_bytes=None):
 # ==========================================
 print("🤖 Bot iniciado. Esperando mensajes...", flush=True)
 last_update_id = 0
+processed_updates = set()
 
 while True:
     try:
@@ -126,15 +126,27 @@ while True:
             
             for update in updates:
                 update_id = update.get('update_id')
+                
+                # Evitar procesar el mismo update múltiples veces
+                if update_id in processed_updates:
+                    continue
+                
                 message = update.get('message', {})
                 chat_id = message.get('chat', {}).get('id')
                 
+                # Actualizar último update procesado
                 if update_id > last_update_id:
                     last_update_id = update_id
+                    processed_updates.add(update_id)
+                    
+                    # Limpiar el set periódicamente
+                    if len(processed_updates) > 100:
+                        processed_updates.clear()
                 
                 if 'photo' in message:
                     print(f"📸 Nueva imagen recibida de {chat_id}", flush=True)
                     
+                    # Obtener foto de mayor resolución
                     photo = message['photo'][-1]
                     file_id = photo['file_id']
                     
@@ -163,5 +175,5 @@ while True:
         time.sleep(1)
         
     except Exception as e:
-        print(f"❌ Error en el loop: {e}", flush=True)
+        print(f" Error en el loop: {e}", flush=True)
         time.sleep(5)
